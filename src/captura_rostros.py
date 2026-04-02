@@ -1,0 +1,71 @@
+import cv2
+import os
+
+# --- CONFIGURACIÓN ---
+# Carpeta principal y nombre de la persona a registrar
+dataset_dir = 'data/01_raw'
+nombre_persona = 'Bernardo' 
+ruta_completa = os.path.join(dataset_dir, nombre_persona)
+
+# Número de fotos que quieres tomar en la ráfaga
+fotos_maximas = 400
+
+# Crear la carpeta si no existe
+if not os.path.exists(ruta_completa):
+    os.makedirs(ruta_completa)
+    print(f"Carpeta creada: {ruta_completa}")
+
+# Cargar el modelo preentrenado de OpenCV para detección frontal de rostros
+cascade_path = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
+face_cascade = cv2.CascadeClassifier(cascade_path)
+
+# Iniciar la cámara (el 0 suele ser la cámara web principal)
+cap = cv2.VideoCapture(0)
+
+contador = 0
+print(f"Iniciando captura para {nombre_persona}... Mira a la cámara.")
+
+while True:
+    # Leer el frame de la cámara
+    ret, frame = cap.read()
+    if not ret:
+        print("Error al acceder a la cámara.")
+        break
+
+    # Convertir el frame a escala de grises (mejora la precisión de la detección)
+    grises = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+    # Detectar rostros en el frame
+    rostros = face_cascade.detectMultiScale(grises, scaleFactor=1.3, minNeighbors=5)
+
+    for (x, y, w, h) in rostros:
+        # Dibujar un rectángulo verde para que veas qué está capturando
+        cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
+
+        # Recortar solo la región del rostro
+        rostro_recortado = frame[y:y+h, x:x+w]
+        
+        # Redimensionar a un estándar común para modelos de IA (ej. 150x150 píxeles)
+        rostro_redimensionado = cv2.resize(rostro_recortado, (150, 150))
+
+        # Guardar la imagen en la carpeta
+        nombre_archivo = f"{ruta_completa}/rostro_{contador}.jpg"
+        cv2.imwrite(nombre_archivo, rostro_redimensionado)
+        
+        contador += 1
+        print(f"Capturando foto {contador}/{fotos_maximas}")
+
+    # Mostrar la ventana en vivo
+    cv2.imshow('Captura de Dataset Facial', frame)
+
+    # El programa se detiene de dos formas:
+    # 1. Si llega al límite de fotos máximas
+    # 2. Si presionas la tecla 'ESC' (código 27)
+    tecla = cv2.waitKey(1)
+    if tecla == 27 or contador >= fotos_maximas:
+        break
+
+# Limpieza y cierre
+print("Captura finalizada con éxito.")
+cap.release()
+cv2.destroyAllWindows()

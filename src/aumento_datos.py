@@ -1,71 +1,70 @@
 import cv2
 import os
-import glob
-import random
 import numpy as np
+import random
+import shutil
 
-# --- CONFIGURACIÓN ---
-carpeta_raiz = '../data/02_processed'  
+# Configuración de directorios de entrada y salida final
+base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+input_dir = os.path.join(base_dir, 'data', 'procesadas')
+output_dir = os.path.join(base_dir, 'data', 'dataset')
+objetivo_fotos = 400
 
-def aplicar_transformacion_aleatoria(img):
-    """Aplica transformaciones seguras para reconocimiento facial"""
+def aplicar_aumentacion(imagen):
+    #Genera una variación visual de la imagen original
+    opcion = random.choice(['espejo', 'brillo'])
     
-    # 1. Espejado horizontal (50% de probabilidad)
-    if random.random() > 0.5:
-        img = cv2.flip(img, 1) # 1 significa eje Y (horizontal)
+    if opcion == 'espejo':
+        # Volteo horizontal de la imagen
+        return cv2.flip(imagen, 1)
+    else:
+        # Alteración aleatoria de la luminosidad en el canal V (HSV)
+        factor = random.uniform(0.7, 1.3)
+        hsv = cv2.cvtColor(imagen, cv2.COLOR_BGR2HSV).astype(np.float64)
+        hsv[:, :, 2] = np.clip(hsv[:, :, 2] * factor, 0, 255)
+        return cv2.cvtColor(hsv.astype(np.uint8), cv2.COLOR_HSV2BGR)
+
+def construir_dataset():
+    # Creación de la carpeta raíz del dataset final
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
+    # Procesamiento por cada categoría (alumno o famoso)
+    for categoria in os.listdir(input_dir):
+        ruta_in = os.path.join(input_dir, categoria)
+        ruta_out = os.path.join(output_dir, categoria)
         
-    # 2. Ajuste de brillo (aleatorio entre oscurecer un poco y aclarar un poco)
-    valor_brillo = random.randint(-40, 40)
-    img_brillo = np.int16(img) + valor_brillo
-    img_brillo = np.clip(img_brillo, 0, 255) 
-    img = np.uint8(img_brillo)
-    
-    # 3. Rotación leve (aleatoria entre -10 y 10 grados)
-    angulo = random.uniform(-10, 10)
-    h, w = img.shape[:2]
-    centro = (w // 2, h // 2)
-    matriz_rotacion = cv2.getRotationMatrix2D(centro, angulo, 1.0)
-    img = cv2.warpAffine(img, matriz_rotacion, (w, h), borderMode=cv2.BORDER_REPLICATE)
-    
-    return img
+        if not os.path.isdir(ruta_in): continue
+        if not os.path.exists(ruta_out): os.makedirs(ruta_out)
 
-# Obtener solo las carpetas dentro del directorio raíz
-carpetas_personas = [nombre for nombre in os.listdir(carpeta_raiz) 
-                   if os.path.isdir(os.path.join(carpeta_raiz, nombre))]
-
-print("Iniciando Aumento de Datos (Duplicando dataset)...")
-print("-" * 40)
-
-for persona in carpetas_personas:
-    ruta_persona = os.path.join(carpeta_raiz, persona)
-    
-    # Buscar las imágenes originales
-    archivos_imagenes = glob.glob(os.path.join(ruta_persona, '*.jpg'))
-    
-    # Filtrar para no procesar imágenes que ya hayan sido aumentadas antes
-    archivos_originales = [f for f in archivos_imagenes if '_aug_' not in f]
-    
-    print(f"Procesando {persona}: {len(archivos_originales)} imágenes originales encontradas.")
-    
-    contador_nuevas = 0
-    
-    for ruta_imagen in archivos_originales:
-        img = cv2.imread(ruta_imagen)
+        # Filtrado de archivos de imagen válidos
+        archivos_base = [f for f in os.listdir(ruta_in) if f.endswith(('.jpg', '.png'))]
+        total_base = len(archivos_base)
         
-        if img is None:
-            continue
+        print(f"Procesando {categoria}: {total_base} originales encontradas.")
+
+        # Paso 1: Copiar imágenes originales limitando el total a 400
+        fotos_cargadas = []
+        for i, nombre_archivo in enumerate(archivos_base):
+            if i >= objetivo_fotos: 
+                break
+
+            img = cv2.imread(os.path.join(ruta_in, nombre_archivo))
+            if img is None: continue
             
-        # Generar la nueva imagen alteradaz
-        img_aumentada = aplicar_transformacion_aleatoria(img)
-        
-        # Guardar la nueva imagen con un sufijo "_aug_"
-        nombre_base = os.path.basename(ruta_imagen).replace('.jpg', '')
-        nueva_ruta = os.path.join(ruta_persona, f"{nombre_base}_aug_{contador_nuevas}.jpg")
-        
-        cv2.imwrite(nueva_ruta, img_aumentada)
-        contador_nuevas += 1
-        
-    print(f"  -> Se generaron {contador_nuevas} imágenes nuevas. Total ahora: {len(archivos_originales) + contador_nuevas}")
+            cv2.imwrite(os.path.join(ruta_out, f"original_{i}.jpg"), img)
+            fotos_cargadas.append(img)
 
-print("-" * 40)
-print("¡Proceso completado! Tu dataset ha sido duplicado de forma segura.")
+        # Paso 2: Generar imágenes aumentadas si no se alcanzó el objetivo
+        if total_base > 0:
+            faltantes = objetivo_fotos - len(fotos_cargadas)
+            for i in range(max(0, faltantes)):
+                # Selecciona una foto procesada al azar para transformarla
+                foto_base = random.choice(fotos_cargadas)
+                nueva_img = aplicar_aumentacion(foto_base)
+                cv2.imwrite(os.path.join(ruta_out, f"aumentada_{i}.jpg"), nueva_img)
+            
+            print(f"--- Finalizado: {categoria} tiene 400 imágenes en /dataset.")
+
+if __name__ == "__main__":
+    construir_dataset()

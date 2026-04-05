@@ -1,61 +1,54 @@
-from icrawler.builtin import BingImageCrawler
+#############################################################################################
+# Se eligió el dataset LFW (Labeled Faces in the Wild) por ser un estándar académico curado. 
+# Esto garantiza el uso de fotografías reales de figuras públicas 
+# y elimina el "ruido" de los buscadores (como imágenes de IA o dibujos), 
+# asegurando un entrenamiento limpio y profesional.
+#############################################################################################
 import os
+import cv2
+import numpy as np
+from sklearn.datasets import fetch_lfw_people
 
-# 1. Definir los famosos
-famosos = [
-    "Scarlett Johansson", 
-    "Lionel Messi",
-    "Canelo Alvarez",
-    "Taylor Swift",
-    "Jared Borgetti",
-    "Cristiano Ronaldo"
-]
+# Configuración de rutas relativas dentro del proyecto
+base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+preprocesadas_dir = os.path.join(base_dir, 'data', 'preprocesadas')
 
-# 2. Definir "modificadores" de búsqueda para engañar al límite
-# Esto multiplicará tus resultados.
-modificadores = ["2018", "2019", "2020"]
+# Definimos el número de categorías de famosos requeridas
+cantidad_famosos = 6
 
-# 3. Ruta de destino base
-base_dir = "../data/01_raw/famososSinProcesar"
-os.makedirs(base_dir, exist_ok=True)
-
-# 4. Bucle de descarga
-for personaje in famosos:
-    print(f"\n=======================================")
-    print(f"Iniciando recolección masiva: {personaje}")
-    print(f"=======================================")
+def obtener_famosos_reales():
+    # Descarga el dataset académico (solo personas con al menos 70 fotos)
+    print("Accediendo al dataset LFW (Fotos reales)...")
+    lfw = fetch_lfw_people(min_faces_per_person=70, color=True, slice_=None)
     
-    folder_name = personaje.replace(" ", "_")
-    output_dir = os.path.join(base_dir, folder_name)
-    os.makedirs(output_dir, exist_ok=True)
+    # Cuenta cuántas fotos tiene cada persona en el dataset
+    counts = np.bincount(lfw.target)
     
-    # Bucle interno para hacer varias búsquedas del mismo personaje
-    for mod in modificadores:
-        # Contar cuántas imágenes hay actualmente en la carpeta para no sobrescribir
-        imagenes_actuales = len([name for name in os.listdir(output_dir) if os.path.isfile(os.path.join(output_dir, name))])
+    # Selecciona los índices de los 6 famosos con mayor cantidad de imágenes
+    top_indices = np.argsort(counts)[-cantidad_famosos:][::-1]
+    
+    # Itera sobre los famosos seleccionados para extraer sus fotos
+    for idx in top_indices:
+        # Limpia el nombre para usarlo como carpeta (cambia espacios por guiones bajos)
+        nombre = lfw.target_names[idx].replace(" ", "_")
+        ruta_famoso = os.path.join(preprocesadas_dir, nombre)
         
-        # Si ya llegamos a la meta de 300 (o más), saltamos al siguiente famoso
-        if imagenes_actuales >= 300:
-            print(f"¡Meta de 300 imágenes alcanzada para {personaje}!")
-            break
-            
-        termino_busqueda = f"{personaje} {mod}"
-        print(f"-> Buscando variación: '{termino_busqueda}' (Imágenes actuales: {imagenes_actuales})")
+        # Crea la carpeta de la categoría si no existe
+        os.makedirs(ruta_famoso, exist_ok=True)
         
-        try:
-            bing_crawler = BingImageCrawler(
-                downloader_threads=4,
-                storage={'root_dir': output_dir}
-            )
+        # Localiza todas las imágenes pertenecientes a este famoso
+        indices_persona = np.where(lfw.target == idx)[0]
+        print(f"Extrayendo {len(indices_persona)} fotos reales de: {nombre}")
+        
+        # Guarda cada imagen individualmente en el almacenamiento local
+        for i, img_idx in enumerate(indices_persona):
+            img = lfw.images[img_idx]
             
-            # Pedimos 80 por cada variación y usamos el número de imágenes actuales como offset
-            bing_crawler.crawl(
-                keyword=termino_busqueda, 
-                max_num=80, 
-                file_idx_offset=imagenes_actuales
-            )
-        except Exception as e:
-            print(f"Error en la búsqueda '{termino_busqueda}': {e}. Continuando con la siguiente variación...")
-            continue
+            # Convierte la imagen de formato RGB (float 0-1) a BGR (uint8 0-255) para OpenCV
+            img_bgr = cv2.cvtColor((img * 255).astype(np.uint8), cv2.COLOR_RGB2BGR)
+            
+            # Escribe el archivo JPG en la carpeta correspondiente
+            cv2.imwrite(os.path.join(ruta_famoso, f"real_{i}.jpg"), img_bgr)
 
-print("\n¡Descarga masiva completada al 100%!")
+if __name__ == "__main__":
+    obtener_famosos_reales()

@@ -1,74 +1,48 @@
 import cv2
 import os
 
-# --- CONFIGURACIÓN DE RUTAS ---
-# Carpeta donde están las fotos originales que descargaste
-input_dir = '../data/01_raw/famososSinProcesar'
+# Configuración de las rutas de entrada (fotos originales) y salida (recortes)
+base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+input_dir = os.path.join(base_dir, 'data', 'preprocesadas')
+output_dir = os.path.join(base_dir, 'data', 'procesadas')
 
-# Nueva carpeta donde se guardarán SOLAMENTE los rostros recortados a 160x160
-output_dir = '../data/02_processed/'
+# Carga del clasificador preentrenado de OpenCV para detección frontal de rostros
+face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
 
-# Cargar el modelo preentrenado de OpenCV 
-cascade_path = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
-face_cascade = cv2.CascadeClassifier(cascade_path)
-
-# Asegurarnos de que el directorio de entrada exista
-if not os.path.exists(input_dir):
-    print(f"Error: No se encontró la carpeta {input_dir}")
-    exit()
-
-print("Iniciando extracción masiva de rostros...")
-
-# 1. Recorrer cada subcarpeta (cada famoso) en el directorio de entrada
-for nombre_personaje in os.listdir(input_dir):
-    ruta_personaje_crudo = os.path.join(input_dir, nombre_personaje)
-    
-    # Ignorar si no es una carpeta
-    if not os.path.isdir(ruta_personaje_crudo):
-        continue
-
-    # Crear la carpeta de destino para este famoso en específico
-    ruta_personaje_procesado = os.path.join(output_dir, nombre_personaje)
-    os.makedirs(ruta_personaje_procesado, exist_ok=True)
-    
-    contador = 0
-    print(f"\nProcesando imágenes de: {nombre_personaje}...")
-
-    # 2. Recorrer cada imagen dentro de la carpeta del famoso
-    for nombre_imagen in os.listdir(ruta_personaje_crudo):
-        ruta_imagen = os.path.join(ruta_personaje_crudo, nombre_imagen)
+def procesar_dataset_real():
+    # Recorre cada carpeta de celebridad en el directorio de preprocesadas
+    for famoso in os.listdir(input_dir):
+        path_in = os.path.join(input_dir, famoso)
+        path_out = os.path.join(output_dir, famoso)
         
-        # Leer la imagen
-        imagen = cv2.imread(ruta_imagen)
+        # Filtra solo directorios y crea la carpeta de destino si no existe
+        if not os.path.isdir(path_in): continue
+        os.makedirs(path_out, exist_ok=True)
+
+        print(f"Procesando recortes de: {famoso}")
+        contador = 0
         
-        # Si OpenCV no puede leer la imagen (archivo corrupto o formato no soportado), la saltamos
-        if imagen is None:
-            continue
+        # Procesa cada imagen descargada individualmente
+        for img_name in os.listdir(path_in):
+            img = cv2.imread(os.path.join(path_in, img_name))
+            if img is None: continue
 
-        # Convertir a escala de grises para el detector
-        grises = cv2.cvtColor(imagen, cv2.COLOR_BGR2GRAY)
-
-        # Detectar rostros
-        rostros = face_cascade.detectMultiScale(grises, scaleFactor=1.2, minNeighbors=5)
-
-        # 3. Recortar y guardar cada rostro encontrado
-        for (x, y, w, h) in rostros:
-            # Recortar solo la región del rostro
-            rostro_recortado = imagen[y:y+h, x:x+w]
+            # Convierte a escala de grises para optimizar la detección del algoritmo
+            grises = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             
-            try:
-                # Redimensionar a 160x160 píxeles
-                rostro_redimensionado = cv2.resize(rostro_recortado, (160, 160))
+            # Detecta las coordenadas del rostro dentro de la imagen
+            rostros = face_cascade.detectMultiScale(grises, 1.3, 5)
+
+            for (x, y, w, h) in rostros:
+                # Recorta el área del rostro y redimensiona exactamente a 160x160 px
+                rostro = cv2.resize(img[y:y+h, x:x+w], (160, 160))
                 
-                # Guardar la imagen en la nueva carpeta
-                nombre_archivo = f"rostro_{contador}.jpg"
-                ruta_guardado = os.path.join(ruta_personaje_procesado, nombre_archivo)
-                cv2.imwrite(ruta_guardado, rostro_redimensionado)
-                
+                # Guarda el rostro procesado con un nombre seriado
+                cv2.imwrite(os.path.join(path_out, f"rostro_{contador}.jpg"), rostro)
                 contador += 1
-            except Exception as e:
-                continue
+                
+                # Procesa solo el primer rostro detectado para evitar ruido en fotos grupales
+                break
 
-    print(f"-> {contador} rostros extraídos con éxito para {nombre_personaje}.")
-
-print("\n¡Extracción y procesamiento finalizado! Revisa la carpeta:", output_dir)
+if __name__ == "__main__":
+    procesar_dataset_real()

@@ -1,68 +1,71 @@
 import cv2
 import os
 
-# --- CONFIGURACIÓN ---
-dataset_dir = '../data/02_processed'  
-nombre_persona = 'Nombre' 
+# Definimos parámetros generales y variables de ruta.
+# Se usa ruta dinámica referida al archivo para asegurar que el dataset vaya a `data/procesadas`.
+base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+dataset_dir = os.path.join(base_dir, 'data', 'dataset')
+nombre_persona = 'Bernardo_Bejarano' 
 ruta_completa = os.path.join(dataset_dir, nombre_persona)
 fotos_maximas = 400
 
-# Crear la carpeta si no existe
+# Aseguramos la existencia del directorio objetivo
 if not os.path.exists(ruta_completa):
     os.makedirs(ruta_completa)
-    print(f"Carpeta creada: {ruta_completa}")
+    print(f"Directorio creado: {ruta_completa}")
 
-# Cargar el modelo preentrenado de OpenCV 
+# Inicializamos el clasificador preentrenado de filtros de Haar de OpenCV
 cascade_path = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
 face_cascade = cv2.CascadeClassifier(cascade_path)
 
-# Iniciar la cámara
-cap = cv2.VideoCapture(0)
+# Inicializamos la captura de video en el índice 0 (se mantiene CAP_DSHOW para evitar bloqueos)
+cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+if not cap.isOpened():
+    print("Error crítico: No hay dispositivo de video disponible en el índice 0.")
+    exit()
 
 contador = 0
-print(f"Iniciando captura para {nombre_persona}... Mira a la cámara.")
+print(f"Captura iniciada para la etiqueta '{nombre_persona}'.")
 
 while True:
-    # Leer el frame de la cámara
+    # Leemos cada frame del flujo de video
     ret, frame = cap.read()
     if not ret:
-        print("Error al acceder a la cámara.")
+        print("Error en el flujo de video.")
         break
 
-    # Convertir el frame a escala de grises (mejora la precisión de la detección del rostro)
+    # Convertimos a escala de grises para optimizar la detección del modelo
     grises = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-    # Detectar rostros en el frame
+    # Identificamos las coordenadas de las caras en el frame actual iterando a baja escala
     rostros = face_cascade.detectMultiScale(grises, scaleFactor=1.3, minNeighbors=1)
 
     for (x, y, w, h) in rostros:
-        # Dibujar rectángulo para que veas qué está capturando
+        # Trazamos una región de interés (ROI) referencial en la ventana
         cv2.rectangle(frame, (x, y), (x+w, y+h), (255, 124, 124), 2)
 
-        # Recortar solo la región del rostro
+        # Recortamos la ROI identificada
         rostro_recortado = frame[y:y+h, x:x+w]
         
-        # Redimensionar a 160x160 píxeles
+        # Normalizamos la resolución de la muestra a 160x160 px
         rostro_redimensionado = cv2.resize(rostro_recortado, (160, 160))
 
-        # Guardar la imagen en la carpeta
+        # Almacenamos la matriz procesada en nuestra base de datos local
         nombre_archivo = f"{ruta_completa}/rostro_{contador}.jpg"
         cv2.imwrite(nombre_archivo, rostro_redimensionado)
         
         contador += 1
-        print(f"Capturando foto {contador}/{fotos_maximas}")
+        print(f"Progreso extracción: {contador}/{fotos_maximas}")
 
-    # Mostrar la ventana en vivo
-    cv2.imshow('Captura de Dataset Facial', frame)
+    # Renderizamos el feed de video para monitoreo del usuario
+    cv2.imshow('Módulo de recolección de dataset', frame)
 
-    # El programa se detiene de dos formas:
-    # 1. Si llega al límite de fotos máximas
-    # 2. Si presionas la tecla 'ESC' (código 27)
+    # Condición de paro: extracción concluida o interrupción de usuario a través de ESC
     tecla = cv2.waitKey(1)
     if tecla == 27 or contador >= fotos_maximas:
         break
 
-# Limpieza y cierre
-print("Captura finalizada con éxito.")
+# Liberamos el hardware y procesos gráficos tomados por el sistema
+print("Extracción procesada por completo.")
 cap.release()
 cv2.destroyAllWindows()

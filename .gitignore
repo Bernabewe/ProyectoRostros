@@ -17,13 +17,5 @@ __pycache__/
 .vscode/
 .idea/
 
-# Datos (ignorar contenido, mantener carpetas)
-data/01_raw/*
-!data/01_raw/.gitkeep
-data/02_processed/*
-!data/02_processed/.gitkeep
-data/03_final/*
-!data/03_final/.gitkeep
-
 # Jupyter
 .ipynb_checkpoints

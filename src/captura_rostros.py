@@ -2,12 +2,9 @@ import cv2
 import os
 
 # --- CONFIGURACIÓN ---
-# Carpeta principal y nombre de la persona a registrar
-dataset_dir = 'data/01_raw'
-nombre_persona = 'Bernardo' 
+dataset_dir = '../data/02_processed'  
+nombre_persona = 'Nombre' 
 ruta_completa = os.path.join(dataset_dir, nombre_persona)
-
-# Número de fotos que quieres tomar en la ráfaga
 fotos_maximas = 400
 
 # Crear la carpeta si no existe
@@ -15,11 +12,11 @@ if not os.path.exists(ruta_completa):
     os.makedirs(ruta_completa)
     print(f"Carpeta creada: {ruta_completa}")
 
-# Cargar el modelo preentrenado de OpenCV para detección frontal de rostros
+# Cargar el modelo preentrenado de OpenCV 
 cascade_path = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
 face_cascade = cv2.CascadeClassifier(cascade_path)
 
-# Iniciar la cámara (el 0 suele ser la cámara web principal)
+# Iniciar la cámara
 cap = cv2.VideoCapture(0)
 
 contador = 0
@@ -32,21 +29,21 @@ while True:
         print("Error al acceder a la cámara.")
         break
 
-    # Convertir el frame a escala de grises (mejora la precisión de la detección)
+    # Convertir el frame a escala de grises (mejora la precisión de la detección del rostro)
     grises = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
     # Detectar rostros en el frame
-    rostros = face_cascade.detectMultiScale(grises, scaleFactor=1.3, minNeighbors=5)
+    rostros = face_cascade.detectMultiScale(grises, scaleFactor=1.3, minNeighbors=1)
 
     for (x, y, w, h) in rostros:
-        # Dibujar un rectángulo verde para que veas qué está capturando
-        cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
+        # Dibujar rectángulo para que veas qué está capturando
+        cv2.rectangle(frame, (x, y), (x+w, y+h), (255, 124, 124), 2)
 
         # Recortar solo la región del rostro
         rostro_recortado = frame[y:y+h, x:x+w]
         
-        # Redimensionar a un estándar común para modelos de IA (ej. 150x150 píxeles)
-        rostro_redimensionado = cv2.resize(rostro_recortado, (150, 150))
+        # Redimensionar a 160x160 píxeles
+        rostro_redimensionado = cv2.resize(rostro_recortado, (160, 160))
 
         # Guardar la imagen en la carpeta
         nombre_archivo = f"{ruta_completa}/rostro_{contador}.jpg"
